@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev --env local",
+    "dev": "node init && wrangler dev --env local",
     "deploy": "wrangler deploy",
     "deploy-dev": "wrangler deploy --env dev",
     "deploy-prod": "wrangler deploy --env prod",

@@ -63,3 +63,4 @@ gha-creds-*.json
 # Python bytecode from tooling/pii and other scripts.
 **/__pycache__/
 **/*.pyc
+config.bat
