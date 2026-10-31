@@ -1,0 +1,41 @@
+# Macro OS Coolify Environment Configuration
+# These are default values for self-hosting on Coolify.
+# In Coolify, you can add or override these in the Application -> Environment Variables tab.
+
+# Domain & Ingress
+DOMAIN=macro.ty-dev.site
+COOLIFY_APP_NAME="Macro OS"
+
+# Secrets (Change in production!)
+INTERNAL_API_SECRET_KEY=local-development-internal-secret-key-32chars
+DOCUMENT_PERMISSION_JWT=local-development-doc-permission-jwt-key
+DOCUMENT_STORAGE_SERVICE_AUTH_KEY=local-development-dss-auth-key
+
+# Database
+POSTGRES_USER=user
+POSTGRES_PASSWORD=password
+POSTGRES_DB=macrodb
+DATABASE_URL=postgres://user:password@postgres:5432/macrodb
+DATABASE_URL_READONLY=postgres://user:password@postgres:5432/macrodb
+
+# Redis
+REDIS_URI=redis://redis:6379
+DOCUMENT_STORAGE_SERVICE_REDIS_URI=redis://redis:6379
+
+# FusionAuth
+FUSIONAUTH_URL=http://fusionauth:9011
+FUSIONAUTH_API_KEY=bf69486b-4733-4954-a44e-2e1b5f2c8a91
+
+# Kafka & Search
+KAFKA_BROKERS=kafka:29092
+OPENSEARCH_URL=http://search:9200
+
+# LocalStack AWS Emulation
+LOCAL_AWS_URL=http://localstack:4566
+AWS_ACCESS_KEY_ID=test
+AWS_SECRET_ACCESS_KEY=test
+AWS_REGION=us-east-1
+AWS_DEFAULT_REGION=us-east-1
+
+# Optional GitHub Packages token for building packages (if needed)
+GITHUB_PACKAGES_TOKEN=

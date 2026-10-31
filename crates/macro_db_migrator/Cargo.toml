@@ -6,7 +6,12 @@ version = "0.1.0"
 
 [dependencies]
 sqlx = { workspace = true, features = ["migrate"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[[bin]]
+name = "macro_db_migrator"
+path = "src/bin/main.rs"
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

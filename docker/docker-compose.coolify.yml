@@ -1,0 +1,547 @@
+# Self-Contained Coolify Docker Compose for Macro OS
+# Deployed to Coolify application pt0gmchbegaheyxaqbg45caa
+name: macro
+
+x-common-env: &common-env
+  DATABASE_URL: ${DATABASE_URL:-postgres://user:password@postgres:5432/macrodb}
+  DATABASE_URL_READONLY: ${DATABASE_URL_READONLY:-postgres://user:password@postgres:5432/macrodb}
+  LOCAL_AWS_URL: ${LOCAL_AWS_URL:-http://localstack:4566}
+  AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-test}
+  AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-test}
+  AWS_REGION: ${AWS_REGION:-us-east-1}
+  AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+  REDIS_URI: ${REDIS_URI:-redis://redis:6379}
+  DOCUMENT_STORAGE_SERVICE_REDIS_URI: ${DOCUMENT_STORAGE_SERVICE_REDIS_URI:-redis://redis:6379}
+  KAFKA_BROKERS: ${KAFKA_BROKERS:-kafka:29092}
+  OPENSEARCH_URL: ${OPENSEARCH_URL:-http://search:9200}
+  FUSIONAUTH_URL: ${FUSIONAUTH_URL:-http://fusionauth:9011}
+  FUSIONAUTH_API_KEY: ${FUSIONAUTH_API_KEY:-bf69486b-4733-4954-a44e-2e1b5f2c8a91}
+  INTERNAL_API_SECRET_KEY: ${INTERNAL_API_SECRET_KEY:-local-development-internal-secret-key-32chars}
+  DOCUMENT_PERMISSION_JWT: ${DOCUMENT_PERMISSION_JWT:-local-development-doc-permission-jwt-key}
+  DOCUMENT_STORAGE_SERVICE_AUTH_KEY: ${DOCUMENT_STORAGE_SERVICE_AUTH_KEY:-local-development-dss-auth-key}
+  ATTACHMENT_BUCKET: macro-email-attachments
+  DOCUMENT_STORAGE_BUCKET: doc-storage
+  DOCX_DOCUMENT_UPLOAD_BUCKET: docx-upload
+  STATIC_STORAGE_BUCKET: static-file-storage
+  UPLOAD_STAGING_BUCKET: bulk-upload-staging
+  AGENT_SESSION_CHANGES_BUCKET: agent-session-changes
+  GITHUB_PULL_REQUEST_PATCH_BUCKET: github-pull-request-patches
+  BULK_UPLOAD_REQUESTS_TABLE: bulk-upload
+  CONNECTION_GATEWAY_TABLE: connection-gateway-table
+  STATIC_FILE_SERVICE_DYNAMODB_TABLE_NAME: static-file-metadata
+  OVERRIDE_CHAT_DELETE_QUEUE: delete-chat-handler-queue
+  OVERRIDE_CONTACTS_QUEUE: contacts-queue
+  OVERRIDE_CONVERT_QUEUE: convert-service-queue
+  OVERRIDE_DOCUMENT_DELETE_QUEUE: delete-document-handler-queue
+  OVERRIDE_DOCUMENT_TEXT_EXTRACTOR_QUEUE: document-text-extractor-lambda-queue
+  OVERRIDE_EMAIL_SCHEDULED_QUEUE: email-service-scheduled-queue
+  OVERRIDE_GMAIL_INBOX_SYNC_QUEUE: email-service-gmail-inbox-sync-queue
+  OVERRIDE_GMAIL_INBOX_SYNC_RETRY_QUEUE: email-service-gmail-inbox-retry-queue
+  OVERRIDE_GMAIL_OPS_QUEUE: email-service-gmail-ops-queue
+  OVERRIDE_GMAIL_OPS_RETRY_QUEUE: email-service-gmail-ops-retry-queue
+  OVERRIDE_LINK_MANAGER_QUEUE: email-service-refresh-queue
+  OVERRIDE_NOTIFICATION_QUEUE: http://localstack:4566/000000000000/notification-queue
+  OVERRIDE_NOTIFICATION_INGRESS_QUEUE: http://localstack:4566/000000000000/notification-ingress-queue
+  OVERRIDE_PUSH_NOTIFICATION_EVENT_HANDLER_QUEUE: push-delivery-queue
+  OVERRIDE_WEBHOOK_EVENT_QUEUE: http://localstack:4566/000000000000/webhook-event-queue.fifo
+  OVERRIDE_SEARCH_EVENT_QUEUE: search-event-queue
+  OVERRIDE_AI_PROJECTION_QUEUE: http://localstack:4566/000000000000/ai-projection-queue
+  OVERRIDE_SFS_DELETE_QUEUE: email-sfs-delete-queue
+  OVERRIDE_SFS_UPLOADER_QUEUE: email-service-sfs-mapper-queue
+  OVERRIDE_STATIC_FILE_SERVICE_S3_EVENT_QUEUE_URL: http://localstack:4566/000000000000/static-file-s3-event-notification-queue
+  OVERRIDE_EMAIL_BACKFILL_QUEUE: http://localstack:4566/000000000000/email-service-backfill-queue
+
+services:
+  # ============================================================================
+  # Ingress & Web Frontend Gateway (Traefik Routes Here)
+  # ============================================================================
+  gateway:
+    build:
+      context: .
+      dockerfile: docker/gateway.Dockerfile
+    ports:
+      - "80:80"
+    restart: unless-stopped
+    depends_on:
+      - authentication-service
+      - document_storage_service
+      - sync_service
+    networks:
+      - macro_network
+    labels:
+      - "coolify.managed=true"
+      - "traefik.enable=true"
+      - "traefik.http.routers.macro.rule=Host(`macro.ty-dev.site`)"
+      - "traefik.http.routers.macro.entrypoints=https"
+      - "traefik.http.routers.macro.tls=true"
+      - "traefik.http.routers.macro.tls.certresolver=letsencrypt"
+      - "traefik.http.services.macro.loadbalancer.server.port=80"
+
+  # ============================================================================
+  # Stateful Infrastructure & Databases
+  # ============================================================================
+  postgres:
+    image: pgvector/pgvector:pg18
+    command: postgres -c max_connections=500 -c shared_preload_libraries=pg_stat_statements
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d macrodb"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: macrodb
+      PGPASSWORD: password
+    volumes:
+      - macro_pg_data:/var/lib/postgresql
+    networks:
+      - macro_network
+
+  redis:
+    image: redis/redis-stack:latest
+    restart: unless-stopped
+    environment:
+      ALLOW_EMPTY_PASSWORD: "yes"
+    volumes:
+      - macro_redis_data:/data
+    networks:
+      - macro_network
+
+  kafka:
+    image: apache/kafka:3.9.1
+    restart: unless-stopped
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:29093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      CLUSTER_ID: TWFjcm9Mb2NhbEthZmthMQ
+    volumes:
+      - macro_kafka_data:/var/lib/kafka/data
+    networks:
+      - macro_network
+
+  search:
+    build:
+      context: ./infra/local/opensearch
+    image: macro-local-opensearch:dev
+    restart: unless-stopped
+    environment:
+      cluster.name: search
+      discovery.type: single-node
+      node.name: search
+      plugins.security.disabled: "true"
+      bootstrap.memory_lock: "true"
+      OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
+      OPENSEARCH_INITIAL_ADMIN_PASSWORD: "yourStrongPassword123!"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - macro_opensearch_data:/usr/share/opensearch/data
+    networks:
+      - macro_network
+
+  localstack:
+    image: localstack/localstack:4
+    restart: unless-stopped
+    environment:
+      SERVICES: sqs,dynamodb,s3
+      AWS_DEFAULT_REGION: us-east-1
+    volumes:
+      - macro_localstack_data:/var/lib/localstack
+    networks:
+      - macro_network
+
+  fusionauth-db:
+    image: postgres:16.0-bookworm
+    restart: unless-stopped
+    environment:
+      PGDATA: /var/lib/postgresql/data/pgdata
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - macro_fusionauth_db_data:/var/lib/postgresql/data
+    networks:
+      - macro_network
+
+  fusionauth:
+    image: fusionauth/fusionauth-app:1.62.1
+    restart: unless-stopped
+    init: true
+    depends_on:
+      fusionauth-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: jdbc:postgresql://fusionauth-db:5432/fusionauth
+      DATABASE_ROOT_USERNAME: postgres
+      DATABASE_ROOT_PASSWORD: postgres
+      DATABASE_USERNAME: fusionauth
+      FUSIONAUTH_APP_KICKSTART_FILE: /usr/local/fusionauth/kickstart/kickstart.json
+      FUSIONAUTH_APP_MEMORY: 512M
+      FUSIONAUTH_APP_RUNTIME_MODE: development
+      FUSIONAUTH_APP_URL: http://fusionauth:9011
+    volumes:
+      - macro_fusionauth_config:/usr/local/fusionauth/config
+      - ./infra/stacks/fusionauth-instance/kickstart:/usr/local/fusionauth/kickstart:ro
+    networks:
+      - macro_network
+
+  mailpit:
+    image: axllent/mailpit:v1.20
+    restart: unless-stopped
+    environment:
+      MP_WEBROOT: /mailpit
+    networks:
+      - macro_network
+
+  # ============================================================================
+  # Shared Rust Services Bundle Image
+  # ============================================================================
+  rust_services_image:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dev
+      target: services_bundle
+    image: macro-local-rust-services:dev
+    networks:
+      - macro_network
+
+  # ============================================================================
+  # Init Container (Runs migrations and creates S3 buckets / SQS queues)
+  # ============================================================================
+  init_stack:
+    build:
+      context: .
+      dockerfile: docker/init.Dockerfile
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      localstack:
+        condition: service_started
+      rust_services_image:
+        condition: service_started
+    environment:
+      <<: *common-env
+    networks:
+      - macro_network
+
+  # ============================================================================
+  # Rust Application Services
+  # ============================================================================
+  authentication-service:
+    image: macro-local-rust-services:dev
+    command: ["/app/out/authentication_service"]
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      init_stack:
+        condition: service_completed_successfully
+    environment:
+      <<: *common-env
+    networks:
+      - macro_network
+
+  connection_gateway:
+    image: macro-local-rust-services:dev
+    command: ["/app/out/connection_gateway_service"]
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_started
+      init_stack:
+        condition: service_completed_successfully
+    environment:
+      <<: *common-env
+    networks:
+      - macro_network
+
+  contacts_service:
+    image: macro-local-rust-services:dev
+    command: ["/app/out/contacts_service"]
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      init_stack:
+        condition: service_completed_successfully
+    environment:
+      <<: *common-env
+    networks:
+      - macro_network
+
+  document_storage_service:
+    image: macro-local-rust-services:dev
+    command: ["/app/out/document_storage_service"]
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      connection_gateway:
+        condition: service_started
+      authentication-service:
+        condition: service_started
+      sync_service:
+        condition: service_started
+      lexical_service:
+        condition: service_started
+      init_stack:
+        condition: service_completed_successfully
+    environment:
+      <<: *common-env
+      OVERRIDE_SYNC_SERVICE_URL: http://sync_service:8787
+      OVERRIDE_LEXICAL_SERVICE_URL: http://lexical_service:8096
+    networks:
+      - macro_network
+
+  email_service:
+    image: macro-local-rust-services:dev
+    command: ["/app/out/email_service"]
+    restart: unless-stopped
+    depends_on:
+      authentication-service:
+        condition: service_started
+      document_storage_service:
+        condition: service_started
+      connection_gateway:
+        condition: service_started
+      static_file_service:
+        condition: service_started
+      redis:
+        condition: service_started
+      init_stack:
+        condition: service_completed_successfully
+    environment:
+      <<: *common-env
+    networks:
+      - macro_network
+
+  email_pubsub_workers:
+    image: macro-local-rust-services:dev
+    command: ["/app/out/pubsub_workers"]
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      email_service:
+        condition: service_started
+      init_stack:
+        condition: service_completed_successfully
+    environment:
+      <<: *common-env
+    networks:
+      - macro_network
+
+  calendar_service:
+    image: macro-local-rust-services:dev
+    command: ["/app/out/calendar_service"]
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      authentication-service:
+        condition: service_started
+      connection_gateway:
+        condition: service_started
+      init_stack:
+        condition: service_completed_successfully
+    environment:
+      <<: *common-env
+    networks:
+      - macro_network
+
+  notification_service:
+    image: macro-local-rust-services:dev
+    command: ["/app/out/notification_service"]
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_started
+      authentication-service:
+        condition: service_started
+      connection_gateway:
+        condition: service_started
+      document_storage_service:
+        condition: service_started
+      init_stack:
+        condition: service_completed_successfully
+    environment:
+      <<: *common-env
+      OVERRIDE_CONNECTION_GATEWAY_URL: http://connection_gateway:8080
+    networks:
+      - macro_network
+
+  search_processing_service:
+    image: macro-local-rust-services:dev
+    command: ["/app/out/search_processing_service"]
+    restart: unless-stopped
+    depends_on:
+      email_service:
+        condition: service_started
+      lexical_service:
+        condition: service_started
+      search:
+        condition: service_started
+      init_stack:
+        condition: service_completed_successfully
+    environment:
+      <<: *common-env
+      OVERRIDE_LEXICAL_SERVICE_URL: http://lexical_service:8096
+    networks:
+      - macro_network
+
+  static_file_service:
+    image: macro-local-rust-services:dev
+    command: ["/app/out/static_file_service"]
+    restart: unless-stopped
+    depends_on:
+      localstack:
+        condition: service_started
+      init_stack:
+        condition: service_completed_successfully
+    environment:
+      <<: *common-env
+    networks:
+      - macro_network
+
+  unfurl_service:
+    image: macro-local-rust-services:dev
+    command: ["/app/out/unfurl_service"]
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+    networks:
+      - macro_network
+
+  image_proxy_service:
+    image: macro-local-rust-services:dev
+    command: ["/app/out/image_proxy_service"]
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+    networks:
+      - macro_network
+
+  document_upload_finalizer:
+    image: macro-local-rust-services:dev
+    command: ["/app/out/document_upload_finalizer_local_worker"]
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      sync_service:
+        condition: service_started
+      lexical_service:
+        condition: service_started
+      init_stack:
+        condition: service_completed_successfully
+    environment:
+      <<: *common-env
+      DOCUMENT_UPLOAD_FINALIZER_QUEUE_URL: http://localstack:4566/000000000000/document-upload-finalizer-queue
+    networks:
+      - macro_network
+
+  # ============================================================================
+  # Node / Bun Microservices
+  # ============================================================================
+  websocket_service:
+    build:
+      context: .
+      dockerfile: docker/websocket-service.Dockerfile
+    restart: unless-stopped
+    networks:
+      - macro_network
+
+  sync_service:
+    build:
+      context: .
+      dockerfile: docker/sync-service.Dockerfile
+    restart: unless-stopped
+    environment:
+      INTERNAL_API_SECRET_KEY: ${INTERNAL_API_SECRET_KEY:-local-development-internal-secret-key-32chars}
+      DOCUMENT_PERMISSIONS_SECRET: ${DOCUMENT_PERMISSION_JWT:-local-development-doc-permission-jwt-key}
+      DSS_INTERNAL_AUTH_KEY: ${DOCUMENT_STORAGE_SERVICE_AUTH_KEY:-local-development-dss-auth-key}
+    volumes:
+      - macro_sync_state:/app/.wrangler/state
+    networks:
+      - macro_network
+
+  ai_editing_worker:
+    build:
+      context: .
+      dockerfile: docker/ai-editing-worker.Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - sync_service
+    networks:
+      - macro_network
+
+  analytics_proxy:
+    build:
+      context: .
+      dockerfile: docker/analytics-proxy.Dockerfile
+    restart: unless-stopped
+    networks:
+      - macro_network
+
+  lexical_service:
+    build:
+      context: .
+      dockerfile: docker/lexical-service.Dockerfile
+      args:
+        GITHUB_PACKAGES_TOKEN: ${GITHUB_PACKAGES_TOKEN:-}
+    restart: unless-stopped
+    depends_on:
+      - sync_service
+    environment:
+      PORT: "8096"
+      INTERNAL_AUTH_KEY: ${INTERNAL_API_SECRET_KEY:-local-development-internal-secret-key-32chars}
+      SYNC_SERVICE_AUTH_KEY: ${INTERNAL_API_SECRET_KEY:-local-development-internal-secret-key-32chars}
+      SYNC_SERVICE_URL: http://sync_service:8787
+      GITHUB_PACKAGES_TOKEN: ${GITHUB_PACKAGES_TOKEN:-}
+    networks:
+      - macro_network
+
+volumes:
+  macro_pg_data:
+  macro_redis_data:
+  macro_kafka_data:
+  macro_opensearch_data:
+  macro_localstack_data:
+  macro_fusionauth_db_data:
+  macro_fusionauth_config:
+  macro_sync_state:
+
+networks:
+  macro_network:
+    driver: bridge

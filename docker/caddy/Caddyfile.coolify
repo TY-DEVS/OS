@@ -1,0 +1,130 @@
+# Caddy reverse proxy for Coolify deployment
+{
+    auto_https off
+    admin off
+}
+
+:80 {
+    # CORS handling for API & WebSockets
+    @cors header Origin *
+    header @cors {
+        Access-Control-Allow-Origin "{http.request.header.Origin}"
+        Access-Control-Allow-Credentials true
+        Access-Control-Max-Age 86400
+        Vary Origin
+        defer
+    }
+
+    @cors_preflight {
+        method OPTIONS
+        header Origin *
+    }
+    handle @cors_preflight {
+        header Access-Control-Allow-Origin "{http.request.header.Origin}"
+        header Access-Control-Allow-Credentials true
+        header Access-Control-Allow-Methods "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS"
+        header Access-Control-Allow-Headers "{http.request.header.Access-Control-Request-Headers}"
+        header Access-Control-Max-Age 86400
+        header Vary Origin
+        respond 204
+    }
+
+    # Microservice API routes (prefix stripped via handle_path)
+    handle_path /auth/* {
+        reverse_proxy authentication-service:8080
+    }
+    handle_path /contacts/* {
+        reverse_proxy contacts_service:8080
+    }
+    handle_path /dss/* {
+        reverse_proxy document_storage_service:8080
+    }
+    handle_path /email/* {
+        reverse_proxy email_service:8080
+    }
+    handle_path /calendar/* {
+        reverse_proxy calendar_service:8080
+    }
+    handle_path /notification/* {
+        reverse_proxy notification_service:8080
+    }
+    handle_path /unfurl/* {
+        reverse_proxy unfurl_service:8080
+    }
+    handle_path /image-proxy/* {
+        reverse_proxy image_proxy_service:8080
+    }
+    handle_path /agent-harness/* {
+        reverse_proxy agent_harness_service:8080
+    }
+
+    # Special Agent Harness routes
+    @harness path /preview /preview/* /scheduled-action /scheduled-action/* /cognition /cognition/* /mcp /mcp/*
+    handle @harness {
+        reverse_proxy agent_harness_service:8080
+    }
+
+    # Connection Gateway (WebSocket + HTTP)
+    @conn_gateway path /connection-gateway /connection-gateway/*
+    handle @conn_gateway {
+        uri strip_prefix /connection-gateway
+        reverse_proxy connection_gateway:8080
+    }
+
+    # Worker & Cloudflare Emulation routes
+    @websocket path /websocket /websocket/*
+    handle @websocket {
+        uri strip_prefix /websocket
+        reverse_proxy websocket_service:6969
+    }
+
+    @sync path /sync /sync/*
+    handle @sync {
+        uri strip_prefix /sync
+        reverse_proxy sync_service:8787 {
+            header_up Origin http://localhost:3000
+        }
+    }
+
+    handle /i/* {
+        reverse_proxy analytics_proxy:8098 {
+            header_up CF-Connecting-IP {http.request.remote.host}
+        }
+    }
+
+    handle_path /lexical/* {
+        reverse_proxy lexical_service:8096
+    }
+
+    handle_path /ai-editing/* {
+        reverse_proxy ai_editing_worker:8933
+    }
+
+    # Static file storage and LocalStack CDN emulation
+    handle_path /local-storage/* {
+        reverse_proxy localstack:4566
+    }
+    handle_path /static-file/* {
+        route {
+            @svc path /api/* /internal/*
+            reverse_proxy @svc static_file_service:8080
+            rewrite * /static-file-storage{uri}
+            reverse_proxy localstack:4566
+        }
+    }
+
+    # Mailpit Web UI (inspect outgoing emails/magic links in self-hosted setup)
+    handle /mailpit/* {
+        reverse_proxy mailpit:8025
+    }
+    redir /mailpit /mailpit/ 308
+
+    # Frontend Single Page Application
+    redir / "/app/?{query}" 302
+    redir /app /app/ 308
+    handle_path /app/* {
+        root * /srv/frontend
+        try_files {path} /index.html
+        file_server
+    }
+}
