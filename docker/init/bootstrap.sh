@@ -10,8 +10,8 @@ export LOCAL_AWS_URL=${LOCAL_AWS_URL:-http://localstack:4566}
 export DATABASE_URL=${DATABASE_URL:-postgres://user:password@postgres:5432/macrodb}
 
 # 1. Wait for PostgreSQL
-echo "Waiting for PostgreSQL at postgres:5432..."
-until pg_isready -h postgres -p 5432 -U user; do
+echo "Waiting for PostgreSQL at $DATABASE_URL..."
+until pg_isready -d "$DATABASE_URL"; do
   echo "PostgreSQL not ready yet, sleeping 2s..."
   sleep 2
 done

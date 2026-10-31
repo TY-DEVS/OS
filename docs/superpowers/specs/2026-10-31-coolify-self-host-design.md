@@ -60,7 +60,7 @@ Currently, the repository only includes:
                               │
                               ▼
                 [ Stateful Infrastructure ]
-                - PostgreSQL (pgvector:pg18)
+                - External PostgreSQL (Coolify Standalone / Cloud RDS / Supabase)
                 - Redis Stack
                 - Apache Kafka (KRaft)
                 - OpenSearch
@@ -89,11 +89,11 @@ Currently, the repository only includes:
      - `traefik.http.routers.<app-name>.tls.certresolver=letsencrypt`
 
 ### B. Core Stateful Infrastructure
-1. **`postgres`**:
-   - Image: `pgvector/pgvector:pg18`
-   - Volume: `macro_pg_data:/var/lib/postgresql`
-   - Database: `macrodb`, User: `user`, Password: `password`
-   - Command: `postgres -c max_connections=500 -c shared_preload_libraries=pg_stat_statements`
+1. **`postgres` (External / Standalone)**:
+   - Consumed externally via `DATABASE_URL` and `DATABASE_URL_READONLY`.
+   - Connected via Coolify's shared Docker network (`coolify`) or external host/cloud endpoint.
+   - Optional builtin container profile (`profiles: ["builtin-postgres"]`) available for local-only testing.
+   - Required extensions: `vector` (pgvector), `pg_stat_statements`, `pg_trgm`, `btree_gin`, `btree_gist`, `pgcrypto`.
 2. **`redis`**:
    - Image: `redis/redis-stack:latest`
    - Volume: `macro_redis_data:/data`

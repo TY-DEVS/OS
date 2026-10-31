@@ -68,6 +68,7 @@ services:
       - sync_service
     networks:
       - macro_network
+      - coolify
     labels:
       - "coolify.managed=true"
       - "traefik.enable=true"
@@ -81,6 +82,7 @@ services:
   # Stateful Infrastructure & Databases
   # ============================================================================
   postgres:
+    profiles: ["builtin-postgres"]
     image: pgvector/pgvector:pg18
     command: postgres -c max_connections=500 -c shared_preload_libraries=pg_stat_statements
     restart: unless-stopped
@@ -236,8 +238,6 @@ services:
       dockerfile: docker/init.Dockerfile
     restart: "no"
     depends_on:
-      postgres:
-        condition: service_healthy
       localstack:
         condition: service_started
       rust_services_image:
@@ -246,6 +246,7 @@ services:
       <<: *common-env
     networks:
       - macro_network
+      - coolify
 
   # ============================================================================
   # Rust Application Services
@@ -255,8 +256,6 @@ services:
     command: ["/app/out/authentication_service"]
     restart: unless-stopped
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_started
       init_stack:
@@ -265,6 +264,7 @@ services:
       <<: *common-env
     networks:
       - macro_network
+      - coolify
 
   connection_gateway:
     image: macro-local-rust-services:dev
@@ -285,22 +285,19 @@ services:
     command: ["/app/out/contacts_service"]
     restart: unless-stopped
     depends_on:
-      postgres:
-        condition: service_healthy
       init_stack:
         condition: service_completed_successfully
     environment:
       <<: *common-env
     networks:
       - macro_network
+      - coolify
 
   document_storage_service:
     image: macro-local-rust-services:dev
     command: ["/app/out/document_storage_service"]
     restart: unless-stopped
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_started
       connection_gateway:
@@ -319,6 +316,7 @@ services:
       OVERRIDE_LEXICAL_SERVICE_URL: http://lexical_service:8096
     networks:
       - macro_network
+      - coolify
 
   email_service:
     image: macro-local-rust-services:dev
@@ -347,8 +345,6 @@ services:
     command: ["/app/out/pubsub_workers"]
     restart: unless-stopped
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_started
       email_service:
@@ -359,14 +355,13 @@ services:
       <<: *common-env
     networks:
       - macro_network
+      - coolify
 
   calendar_service:
     image: macro-local-rust-services:dev
     command: ["/app/out/calendar_service"]
     restart: unless-stopped
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_started
       authentication-service:
@@ -379,6 +374,7 @@ services:
       <<: *common-env
     networks:
       - macro_network
+      - coolify
 
   notification_service:
     image: macro-local-rust-services:dev
@@ -457,8 +453,6 @@ services:
     command: ["/app/out/document_upload_finalizer_local_worker"]
     restart: unless-stopped
     depends_on:
-      postgres:
-        condition: service_healthy
       sync_service:
         condition: service_started
       lexical_service:
@@ -470,6 +464,7 @@ services:
       DOCUMENT_UPLOAD_FINALIZER_QUEUE_URL: http://localstack:4566/000000000000/document-upload-finalizer-queue
     networks:
       - macro_network
+      - coolify
 
   # ============================================================================
   # Node / Bun Microservices
@@ -545,3 +540,6 @@ volumes:
 networks:
   macro_network:
     driver: bridge
+  coolify:
+    name: coolify
+    external: true

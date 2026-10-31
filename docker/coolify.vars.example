@@ -11,12 +11,18 @@ INTERNAL_API_SECRET_KEY=local-development-internal-secret-key-32chars
 DOCUMENT_PERMISSION_JWT=local-development-doc-permission-jwt-key
 DOCUMENT_STORAGE_SERVICE_AUTH_KEY=local-development-dss-auth-key
 
-# Database
-POSTGRES_USER=user
-POSTGRES_PASSWORD=password
-POSTGRES_DB=macrodb
-DATABASE_URL=postgres://user:password@postgres:5432/macrodb
-DATABASE_URL_READONLY=postgres://user:password@postgres:5432/macrodb
+# Database (External PostgreSQL)
+# Option A - Coolify-managed Standalone PostgreSQL (internal container network):
+# DATABASE_URL=postgres://postgres:<password>@<database_uuid>:5432/postgres
+# Example with existing Infrastructure PostgreSQL (pgg8c00gw00o0gk0kc0g84sc):
+# DATABASE_URL=postgres://postgres:YOMFBjzOHTAZtfogMLYGOvp3jJTBUW7zXIQH7HFHPWC4uzW4muObmDgoNXMhZtOM@pgg8c00gw00o0gk0kc0g84sc:5432/postgres
+# DATABASE_URL_READONLY=postgres://postgres:YOMFBjzOHTAZtfogMLYGOvp3jJTBUW7zXIQH7HFHPWC4uzW4muObmDgoNXMhZtOM@pgg8c00gw00o0gk0kc0g84sc:5432/postgres
+#
+# Option B - External Cloud / Remote PostgreSQL (RDS, Supabase, Neon):
+# DATABASE_URL=postgres://<user>:<password>@<db-host>:5432/<dbname>?sslmode=require
+# DATABASE_URL_READONLY=postgres://<user>:<password>@<db-host>:5432/<dbname>?sslmode=require
+DATABASE_URL=postgres://postgres:YOMFBjzOHTAZtfogMLYGOvp3jJTBUW7zXIQH7HFHPWC4uzW4muObmDgoNXMhZtOM@pgg8c00gw00o0gk0kc0g84sc:5432/postgres
+DATABASE_URL_READONLY=postgres://postgres:YOMFBjzOHTAZtfogMLYGOvp3jJTBUW7zXIQH7HFHPWC4uzW4muObmDgoNXMhZtOM@pgg8c00gw00o0gk0kc0g84sc:5432/postgres
 
 # Redis
 REDIS_URI=redis://redis:6379
