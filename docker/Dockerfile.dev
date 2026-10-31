@@ -52,17 +52,19 @@ FROM debian:trixie-slim AS base
 # host's daemon over the mounted socket, so sandboxes are this container's
 # siblings. The client tarball only - the daemon is the host's.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates dumb-init curl docker-cli \
+    ca-certificates dumb-init curl docker-cli awscli postgresql-client jq \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=deno /usr/bin/deno /usr/local/bin/deno
 ENV DENO_BINARY=/usr/local/bin/deno
+ENV PATH="/app/out:${PATH}"
 ENV PORT=8080
 EXPOSE 8080
 
 FROM base AS services_bundle
 COPY --from=builder /app/out/ /app/out/
-RUN chmod +x /app/out/*
+COPY docker/init/bootstrap.sh /app/bootstrap.sh
+RUN chmod +x /app/out/* /app/bootstrap.sh
 ENTRYPOINT ["dumb-init", "--"]
 
 # Individual service targets

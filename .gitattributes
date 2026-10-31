@@ -15,3 +15,5 @@ packages/sdk-docs/reference/** linguist-generated=true
 # sqlx keys its offline cache (.sqlx) on the exact query text, so a CRLF
 # checkout (Git for Windows) of a `query_file!` source misses the cache.
 *.sql text eol=lf
+
+*.sh text eol=lf

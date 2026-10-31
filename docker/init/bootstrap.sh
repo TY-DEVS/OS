@@ -10,22 +10,37 @@ export LOCAL_AWS_URL=${LOCAL_AWS_URL:-http://localstack:4566}
 export DATABASE_URL=${DATABASE_URL:-postgres://user:password@postgres:5432/macrodb}
 
 # 1. Wait for PostgreSQL
-echo "Waiting for PostgreSQL at $DATABASE_URL..."
-until pg_isready -d "$DATABASE_URL"; do
-  echo "PostgreSQL not ready yet, sleeping 2s..."
-  sleep 2
-done
-echo "PostgreSQL is ready!"
+if command -v pg_isready >/dev/null 2>&1; then
+  echo "Waiting for PostgreSQL at $DATABASE_URL..."
+  retries=30
+  until pg_isready -d "$DATABASE_URL" || [ $retries -eq 0 ]; do
+    echo "PostgreSQL not ready yet, sleeping 2s ($retries left)..."
+    retries=$((retries - 1))
+    sleep 2
+  done
+  if [ $retries -eq 0 ]; then
+    echo "WARNING: pg_isready check timed out, attempting migration directly..."
+  else
+    echo "PostgreSQL is ready!"
+  fi
+fi
 
 # 2. Run Database Migrations
-echo "Running database migrations via macro_db_migrator..."
-/app/macro_db_migrator
+MIGRATOR_BIN="/app/out/macro_db_migrator"
+if [ ! -f "$MIGRATOR_BIN" ]; then
+  MIGRATOR_BIN="/app/macro_db_migrator"
+fi
+
+echo "Running database migrations via $MIGRATOR_BIN..."
+"$MIGRATOR_BIN"
 echo "Database migrations complete!"
 
 # 3. Wait for LocalStack
 echo "Waiting for LocalStack at $LOCAL_AWS_URL..."
-until curl -fsS "$LOCAL_AWS_URL/_localstack/health" >/dev/null 2>&1 || curl -fsS "$LOCAL_AWS_URL" >/dev/null 2>&1; do
-  echo "LocalStack not ready yet, sleeping 2s..."
+retries=30
+until curl -fsS "$LOCAL_AWS_URL/_localstack/health" >/dev/null 2>&1 || curl -fsS "$LOCAL_AWS_URL" >/dev/null 2>&1 || [ $retries -eq 0 ]; do
+  echo "LocalStack not ready yet, sleeping 2s ($retries left)..."
+  retries=$((retries - 1))
   sleep 2
 done
 echo "LocalStack is ready!"

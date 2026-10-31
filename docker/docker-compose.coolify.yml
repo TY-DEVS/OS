@@ -226,6 +226,8 @@ services:
       dockerfile: docker/Dockerfile.dev
       target: services_bundle
     image: macro-local-rust-services:dev
+    command: ["sleep", "infinity"]
+    restart: unless-stopped
     networks:
       - macro_network
 
@@ -233,9 +235,8 @@ services:
   # Init Container (Runs migrations and creates S3 buckets / SQS queues)
   # ============================================================================
   init_stack:
-    build:
-      context: .
-      dockerfile: docker/init.Dockerfile
+    image: macro-local-rust-services:dev
+    command: ["/app/bootstrap.sh"]
     restart: "no"
     depends_on:
       localstack:
