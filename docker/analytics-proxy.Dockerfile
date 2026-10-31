@@ -12,6 +12,7 @@ ENV PATH="/opt/analytics-proxy/node_modules/.bin:${PATH}"
 
 ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
 
+COPY services/analytics-proxy /app/services/analytics-proxy
 WORKDIR /app/services/analytics-proxy
 EXPOSE 8098
 

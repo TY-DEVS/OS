@@ -5,7 +5,10 @@ RUN npm install -g bun
 
 ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
 
+WORKDIR /app
+COPY services/ai-editing-worker /app/services/ai-editing-worker
 WORKDIR /app/services/ai-editing-worker
+RUN bun install
 EXPOSE 8933
 
 CMD ["sh", "-c", "\
