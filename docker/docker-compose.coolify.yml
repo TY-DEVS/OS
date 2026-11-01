@@ -496,6 +496,8 @@ services:
     build:
       context: .
       dockerfile: docker/ai-editing-worker.Dockerfile
+      args:
+        GITHUB_PACKAGES_TOKEN: ${GITHUB_PACKAGES_TOKEN:-}
     restart: unless-stopped
     depends_on:
       - sync_service

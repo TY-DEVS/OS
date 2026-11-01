@@ -6,9 +6,14 @@ RUN npm install -g bun
 ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
 
 WORKDIR /app
-COPY services/ai-editing-worker /app/services/ai-editing-worker
+
+ARG GITHUB_PACKAGES_TOKEN
+RUN if [ -n "${GITHUB_PACKAGES_TOKEN}" ]; then echo '[install.scopes]\nmacro-inc = { token = "'${GITHUB_PACKAGES_TOKEN}'", url = "https://npm.pkg.github.com" }' > /root/.bunfig.toml; fi
+
+COPY . .
+RUN bun install --frozen-lockfile || bun install
+
 WORKDIR /app/services/ai-editing-worker
-RUN bun install
 EXPOSE 8933
 
 CMD ["sh", "-c", "\
