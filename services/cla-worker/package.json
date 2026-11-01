@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "node init && wrangler dev",
     "deploy": "wrangler d1 migrations apply macro-cla --remote && wrangler deploy",
     "check": "tsc --noEmit"
   },

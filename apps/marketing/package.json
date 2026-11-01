@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --config vite.config.ts",
-    "build": "bun run check:standalone && vite build -c vite.config.ts && vite build -c vite.prerender.config.ts && bun scripts/prerender.ts && bun scripts/verify-seo.ts",
+    "dev": "node init && vite --config vite.config.ts",
+    "build": "node init && bun run check:standalone && vite build -c vite.config.ts && vite build -c vite.prerender.config.ts && bun scripts/prerender.ts && bun scripts/verify-seo.ts",
     "check:standalone": "bun scripts/verify-standalone.ts",
     "type-check": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run -c vitest.config.ts",

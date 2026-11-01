@@ -22,7 +22,9 @@
       "import": "./dist/generated/*/index.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "publishConfig": {
     "access": "public"
   },
@@ -32,9 +34,9 @@
     "validate-webhook": "bun scripts/validate-webhook.ts",
     "coverage": "bun src/coverage/check.ts",
     "generate": "openapi-ts",
-    "build:js": "bun scripts/build.ts",
-    "build:types": "tsc -p tsconfig.build.json",
-    "build": "bun run build:js && bun run build:types",
+    "build:js": "node init && bun scripts/build.ts",
+    "build:types": "node init && tsc -p tsconfig.build.json",
+    "build": "node init && bun run build:js && bun run build:types",
     "prepublishOnly": "bun run build",
     "check": "tsc --noEmit",
     "lint": "biome check",

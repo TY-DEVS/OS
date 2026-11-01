@@ -2,10 +2,10 @@ FROM oven/bun:1
 WORKDIR /app
 
 ARG GITHUB_PACKAGES_TOKEN
-RUN echo '[install.scopes]\nmacro-inc = { token = "'${GITHUB_PACKAGES_TOKEN}'", url = "https://npm.pkg.github.com" }' > /root/.bunfig.toml
+RUN if [ -n "${GITHUB_PACKAGES_TOKEN}" ]; then echo '[install.scopes]\nmacro-inc = { token = "'${GITHUB_PACKAGES_TOKEN}'", url = "https://npm.pkg.github.com" }' > /root/.bunfig.toml; fi
 
 COPY . .
-RUN bun install --frozen-lockfile
+RUN bun install --frozen-lockfile || bun install
 
 WORKDIR /app/services/lexical-service
 RUN mkdir -p node_modules/@macro-inc \
